@@ -3,10 +3,10 @@ import dotenv
 dotenv.load_dotenv()
 
 from typing import List, Tuple, Union
+from tqdm import tqdm
 import json
 import os
 import uuid
-import torch
 import warnings
 import pandas as pd
 import numpy as np
@@ -21,9 +21,6 @@ from langchain.chains.retrieval import create_retrieval_chain
 
 from langchain.evaluation import (
     StringEvaluator,
-    load_evaluator,
-    EvaluatorType,
-    EmbeddingDistance,
     EmbeddingDistanceEvalChain,
     StringDistance,
     StringDistanceEvalChain,
@@ -31,54 +28,31 @@ from langchain.evaluation import (
 )
 
 
-# def evaluate(ground_truths, predictions, questions=None):
-#     embeddings = OllamaEmbeddings(model="nomic-embed-text")
-#     # embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-#     # embeddings = OpenAIEmbeddings()
-
-#     # fmt: off
-#     METRICS: List[Union[StringEvaluator]] = [
-#         ('StringDistance(StringDistance.JARO)', StringDistanceEvalChain(distance=StringDistance.JARO),),
-#         ('StringDistance(StringDistance.JARO_WINKLER)', StringDistanceEvalChain(distance=StringDistance.JARO_WINKLER),),
-#         ('StringDistance(StringDistance.INDEL)', StringDistanceEvalChain(distance=StringDistance.INDEL),),
-#         ('StringDistance(StringDistance.LEVENSHTEIN)', StringDistanceEvalChain(distance=StringDistance.LEVENSHTEIN),),
-#         ('EmbeddingDistance(embeddings=nomic-embed-text)', EmbeddingDistanceEvalChain(embeddings=embeddings),),
-#     ]
-#     # fmt: on
-
-#     results_df = pd.DataFrame(
-#         columns=(
-#             (["Question"] if questions else [])
-#             + ["Ground_Truth", "Answer"]
-#             + [name for name, _ in METRICS]
-#         )
-#     )
-#     for i, (ground_truth, answer) in enumerate(zip(ground_truths, predictions)):
-#         row_data = {
-#             "Ground_Truth": ground_truth,
-#             "Answer": answer,
-#         }
-#         if questions:
-#             row_data["Question"] = questions[i]
-
-#         for evaluator_name, evaluator in METRICS:
-#             comparison_result = evaluator.evaluate_strings(
-#                 prediction=answer,
-#                 reference=ground_truth,
-#             )
-#             score = comparison_result["score"]
-#             row_data[evaluator_name] = score
-
-#         results_df.loc[len(results_df)] = row_data
-
-#     return results_df
-
-
 def evaluate(ground_truths, predictions, questions=None, name=None, save_data=True):
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    # embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-    # embeddings = OpenAIEmbeddings()
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
+
+    SYSTEM_MESSAGE = "You are a helpful assistant."
+    SCORING_TEMPLATE_WITH_REFERENCE = ChatPromptTemplate.from_messages(
+        [
+            ("system", SYSTEM_MESSAGE),
+            (
+                "human",
+                "[Instruction]\nPlease act as an impartial judge \
+    and evaluate the quality of the response provided by an AI \
+    assistant to the user question displayed below in a trivia game. \
+    The question is about something in the world the Harry Potter book series. \
+    Your evaluation should consider factors such as the helpfulness, relevance, \
+    accuracy, depth, creativity, and specially how direct the response was."
+                '[Ground truth]\n{reference}\nBegin your evaluation \
+    by providing a short explanation. Be as objective as possible. \
+    After providing your explanation, you must rate the response on a scale of 1 to 10 \
+    by strictly following this format: "[[rating]]", for example: "Rating: [[5]]".\n\n\
+    [Question]\n{input}\n\n[The Start of Assistant\'s Answer]\n{prediction}\n\
+    [The End of Assistant\'s Answer]',
+            ),
+        ]
+    )
 
     # fmt: off
     METRICS: List[Tuple[str, StringEvaluator]] = [
@@ -87,14 +61,25 @@ def evaluate(ground_truths, predictions, questions=None, name=None, save_data=Tr
         ('StringDst(INDEL)', StringDistanceEvalChain(distance=StringDistance.INDEL),),
         ('StringDst(LEVENSHTEIN)', StringDistanceEvalChain(distance=StringDistance.LEVENSHTEIN),),
         ('EmbeddingDst(nomic-embed-text)', EmbeddingDistanceEvalChain(embeddings=embeddings),),
-        ('LabeledScoreString(GPT4o-mini)', LabeledScoreStringEvalChain.from_llm(llm),),
+        ('LabeledScoreString(GPT4o-mini)', LabeledScoreStringEvalChain(llm=llm, prompt=SCORING_TEMPLATE_WITH_REFERENCE, criterion_name="Customized-criteria"),),
     ]
     # fmt: on
 
     results = []
+
+    ground_truths_and_predictions = list(zip(ground_truths, predictions))
+    progress_ground_truths_and_predictions = tqdm(
+        ground_truths_and_predictions,
+        total=len(ground_truths_and_predictions),
+        desc="Evaluating Responses",
+        unit="response",
+    )
     try:
-        warnings.filterwarnings('ignore', category=UserWarning)
-        for i, (ground_truth, answer) in enumerate(zip(ground_truths, predictions)):
+        warnings.filterwarnings("ignore", category=UserWarning)
+        for i, (ground_truth, answer) in enumerate(
+            progress_ground_truths_and_predictions
+        ):
+            progress_ground_truths_and_predictions.set_description(f"Evaluating...")
             row_data = {
                 "Ground_Truth": ground_truth,
                 "Answer": answer,
@@ -102,17 +87,23 @@ def evaluate(ground_truths, predictions, questions=None, name=None, save_data=Tr
             if questions and i < len(questions):
                 row_data["Question"] = questions[i]
 
-            for (evaluator_name, evaluator) in METRICS:
-                question = questions[i]
-                comparison_result = evaluator.evaluate_strings(
-                    prediction=answer,
-                    reference=ground_truth,
-                    input=question,
-                )
-                score = comparison_result["score"]
-                row_data[evaluator_name] = score
+            for evaluator_name, evaluator in METRICS:
+                try:
+                    question = questions[i]
+                    comparison_result = evaluator.evaluate_strings(
+                        prediction=answer,
+                        reference=ground_truth,
+                        input=question,
+                    )
+                    score = comparison_result["score"]
+                    row_data[evaluator_name] = score
+                except Exception as e:
+                    print(f"Error in {evaluator_name}: {e}")
 
             results.append(row_data)
+        progress_ground_truths_and_predictions.set_description_str(
+            "Done evaluating responses."
+        )
     finally:
         warnings.resetwarnings()
 
