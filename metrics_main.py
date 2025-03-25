@@ -28,7 +28,14 @@ from langchain.evaluation import (
 )
 
 
-def evaluate(ground_truths, predictions, questions=None, name=None, save_data=True):
+def evaluate(
+    ground_truths,
+    predictions,
+    questions=None,
+    name=None,
+    save_data=True,
+    data_filename_prefix="",
+):
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
 
@@ -110,7 +117,7 @@ def evaluate(ground_truths, predictions, questions=None, name=None, save_data=Tr
     # Save the data to a JSON file when save_data is True
     if save_data:
         os.makedirs("outputs", exist_ok=True)
-        output_file = f"outputs/{str(uuid.uuid4())}.json"
+        output_file = f"outputs/{data_filename_prefix}{str(uuid.uuid4())}.json"
 
         # Prepare the data to be saved
         data_to_save = {
