@@ -2,19 +2,12 @@ import dotenv
 
 dotenv.load_dotenv()
 
-from sys import argv
 import argparse
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI, OpenAI
+from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
-from langchain_pinecone import PineconeVectorStore
-
-from langchain import hub
 from langchain_core.language_models import BaseChatModel
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains.retrieval import create_retrieval_chain
 from metrics_main import compare_models, evaluate, results_to_dataframe
 from llm import query_llm
 from display import export_html
@@ -29,7 +22,7 @@ MODELS = {
 
 def compute(
     *,
-    name,
+    model_name: str,
     llm: BaseChatModel,
     questions_with_ground_truth: List[Tuple[str, str]],
     verbose=False,
@@ -43,10 +36,10 @@ def compute(
     )
 
     results = evaluate(
+        model_name=model_name,
         ground_truths=ground_truths,
         predictions=predictions,
         questions=questions,
-        name=name,
         save_data=save_data,
         data_filename_prefix=data_filename_prefix,
     )
@@ -63,14 +56,14 @@ def process_all_models(*, dataset: str):
 
     print(f'Processing questions with "LLama2"...')
     baseline_llama2_results = compute(
-        name="LLama2",
+        model_name="LLama2",
         llm=ChatOllama(model="llama2", temperature=0, max_retries=3),
         questions_with_ground_truth=questions_with_ground_truth,
     )
 
     print(f'Processing questions with "GPT 4o mini"...')
     baseline_gpt4o_mini_results = compute(
-        name="Chat GPT 4o mini",
+        model_name="Chat GPT 4o mini",
         llm=ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3),
         questions_with_ground_truth=questions_with_ground_truth,
     )
@@ -109,7 +102,7 @@ def process_model(*, dataset: str, model_id: str, data_filename_prefix: str = ""
 
     print(f'Processing questions with "{model_name}"...')
     baseline_llama2_results = compute(
-        name=model_name,
+        model_name=model_name,
         llm=ChatOllama(model=model_id, temperature=0, max_retries=3),
         questions_with_ground_truth=questions_with_ground_truth,
         save_data=True,
@@ -121,7 +114,6 @@ def process_model(*, dataset: str, model_id: str, data_filename_prefix: str = ""
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-m",

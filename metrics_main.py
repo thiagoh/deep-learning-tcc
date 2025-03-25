@@ -2,9 +2,10 @@ import dotenv
 
 dotenv.load_dotenv()
 
-from typing import List, Tuple, Union
+from typing import Dict, Optional, List, Tuple, Union
 from tqdm import tqdm
 import json
+import glob
 import os
 import uuid
 import warnings
@@ -29,12 +30,13 @@ from langchain.evaluation import (
 
 
 def evaluate(
-    ground_truths,
-    predictions,
-    questions=None,
-    name=None,
+    *,
+    model_name: str,
+    ground_truths: List[str],
+    predictions: List[str],
+    questions: List[str] = None,
     save_data=True,
-    data_filename_prefix="",
+    data_filename_prefix: str = "",
 ):
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
@@ -121,7 +123,7 @@ def evaluate(
 
         # Prepare the data to be saved
         data_to_save = {
-            "name": name,
+            "name": model_name,
             "questions": questions,
             "ground_truths": ground_truths,
             "predictions": predictions,
@@ -131,6 +133,30 @@ def evaluate(
             json.dump(data_to_save, f, indent=2)
 
     return results
+
+
+def load_results(file_prefix: str) -> Dict:
+    directory: str = "outputs"
+    if not os.path.exists(directory):
+        print(f"Directory not found: {directory}")
+        return None
+
+    matching_files = glob.glob(os.path.join(directory, f"{file_prefix}*.json"))
+    if not matching_files:
+        print(f"No files found with prefix '{file_prefix}' in {directory}")
+        return None
+
+    target_file = sorted(matching_files)[0]
+    try:
+        with open(target_file, "r") as f:
+            results = json.load(f)
+
+        print(f"Loaded results from: {target_file}")
+        return results
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading file {target_file}: {e}")
+        raise e
 
 
 def results_to_dataframe(evaluation_results):
@@ -196,113 +222,3 @@ def compare_models(model_results_dict):
     comparison_df = pd.DataFrame.from_dict(comparison_data, orient="index")
 
     return comparison_df
-
-
-def main():
-    # fmt: off
-    questions_with_ground_truth_answer = [
-      ("What are the three European wizarding schools that participate in the Triwizard Tournament?", "Hogwarts, Beauxbatons, and Durmstrang.", "Hogwarts, Beauxbatons, and Durmstrang."),
-      ("Who is the main character?", "Harry Potter", "Harry Potter"),
-      ("Who is the second main character?", "Ron Weasley", "Hermione Granger"),
-      ("When was Hogwarts founded?", "10th century", "tenth century"),
-      ("What is a Wronski Feint?", "Pretending to dive for the Snitch", "Pretending to go into the Snitch"),
-    ]
-    # fmt: on
-
-    ground_truths = []
-    predictions = []
-    questions = []
-    for question, ground_truth, prediction in questions_with_ground_truth_answer:
-        ground_truths.append(ground_truth)
-        questions.append(question)
-        predictions.append(prediction)
-
-    results = evaluate(
-        ground_truths=ground_truths, predictions=predictions, questions=questions
-    )
-    print(results_to_dataframe(results))
-
-
-# def main():
-#     embeddings = OllamaEmbeddings(model="nomic-embed-text")
-#     # embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-#     # embeddings = OpenAIEmbeddings()
-#     # accuracy_metric = evaluate.load("accuracy")
-#     # METRICS = [accuracy_metric]
-
-#     # evaluator.evaluate_strings(
-#     #     prediction="We sold more than 40,000 units last week",
-#     #     input="How many units did we sell last week?",
-#     #     reference="We sold 32,378 units",
-#     # )
-#     METRICS: List[Union[StringEvaluator]] = [
-#         # load_evaluator(EvaluatorType.QA),
-#         # load_evaluator(EvaluatorType.SCORE_STRING),
-#         # load_evaluator(EvaluatorType.LABELED_SCORE_STRING),
-#         # load_evaluator(EvaluatorType.STRING_DISTANCE),
-#         (
-#             "StringDistance(StringDistance.JARO)",
-#             StringDistanceEvalChain(distance=StringDistance.JARO),
-#         ),
-#         (
-#             "StringDistance(StringDistance.JARO_WINKLER)",
-#             StringDistanceEvalChain(distance=StringDistance.JARO_WINKLER),
-#         ),
-#         (
-#             "StringDistance(StringDistance.INDEL)",
-#             StringDistanceEvalChain(distance=StringDistance.INDEL),
-#         ),
-#         (
-#             "StringDistance(StringDistance.LEVENSHTEIN)",
-#             StringDistanceEvalChain(distance=StringDistance.LEVENSHTEIN),
-#         ),
-#         (
-#             "EmbeddingDistance(embeddings=nomic-embed-text)",
-#             EmbeddingDistanceEvalChain(embeddings=embeddings),
-#         ),
-#     ]
-
-#     # fmt: off
-#     questions_with_ground_truth_answer = [
-#       ("What are the three European wizarding schools that participate in the Triwizard Tournament?", "Hogwarts, Beauxbatons, and Durmstrang.", "Hogwarts, Beauxbatons, and Durmstrang."),
-#       ("Who is the main character?", "Harry Potter", "Harry Potter"),
-#       ("Who is the second main character?", "Ron Weasley", "Hermione Granger"),
-#       ("When was Hogwarts founded?", "10th century", "tenth century"),
-#       ("What is a Wronski Feint?", "Pretending to dive for the Snitch", "Pretending to go into the Snitch"),
-#     ]
-#     # fmt: on
-
-#     results_df = pd.DataFrame(
-#         columns=["Question", "Ground_Truth", "Answer"] + [name for name, _ in METRICS]
-#     )
-#     for question, ground_truth, answer in questions_with_ground_truth_answer:
-#         # ground_truth_embeddings = torch.tensor(embeddings.embed_query(ground_truth))
-#         # answer_embeddings = torch.tensor(embeddings.embed_query(answer))
-#         row_data = {
-#             "Question": question,
-#             "Ground_Truth": ground_truth,
-#             "Answer": answer,
-#         }
-
-#         for evaluator_name, evaluator in METRICS:
-#             comparison_result = evaluator.evaluate_strings(
-#                 prediction=answer,
-#                 reference=ground_truth,
-#                 # input=question
-#             )
-#             score = comparison_result["score"]
-#             # print(f"# Metric {evaluator_name}:\t\t{score}")
-
-#             # Add score to row data
-#             row_data[evaluator_name] = score
-
-#         # Append row data to DataFrame
-#         results_df.loc[len(results_df)] = row_data
-#         # print('\n')
-
-#     # Print the full DataFrame at the end
-#     print(results_df)
-
-
-if __name__ == "__main__":
-    main()
