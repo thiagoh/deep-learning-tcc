@@ -29,6 +29,9 @@ pip install langchain-core langchain-openai langchain-ollama langchain-pinecone 
 cp .env.example .env
 # Add your API keys to .env
 
-# trigger comparison
-python main.py
+# process model
+python3 process_model.py --model llama3.2-3b --data_filename_prefix llama32-3b-
+
+# compare models
+python3 compare_models.py --model_results_file_prefix 'run-1-llama2' 'run-1-llama32-3b' 'run-1-gpt-4o-mini' --results_filename_prefix results-run-1
 ```

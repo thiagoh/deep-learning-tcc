@@ -37,6 +37,7 @@ def evaluate(
     questions: List[str] = None,
     save_data=True,
     data_filename_prefix: str = "",
+    verbose=False,
 ):
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
@@ -119,7 +120,7 @@ def evaluate(
     # Save the data to a JSON file when save_data is True
     if save_data:
         os.makedirs("outputs", exist_ok=True)
-        output_file = f"outputs/{data_filename_prefix}{str(uuid.uuid4())}.json"
+        output_file = f"outputs/{data_filename_prefix}-{str(uuid.uuid4())}.json"
 
         # Prepare the data to be saved
         data_to_save = {
@@ -131,11 +132,13 @@ def evaluate(
         }
         with open(output_file, "w") as f:
             json.dump(data_to_save, f, indent=2)
+        if verbose:
+            print(f"Saved results into: {output_file}")
 
     return results
 
 
-def load_results(file_prefix: str) -> Dict:
+def load_results(file_prefix: str, verbose=False) -> Dict:
     directory: str = "outputs"
     if not os.path.exists(directory):
         print(f"Directory not found: {directory}")
@@ -151,7 +154,8 @@ def load_results(file_prefix: str) -> Dict:
         with open(target_file, "r") as f:
             results = json.load(f)
 
-        print(f"Loaded results from: {target_file}")
+        if verbose:
+            print(f"Loaded results from: {target_file}")
         return results
 
     except (FileNotFoundError, json.JSONDecodeError) as e:
@@ -177,48 +181,21 @@ def results_to_dataframe(evaluation_results):
     return df[available_cols + metric_cols]
 
 
-def compare_models(model_results_dict):
-    """
-    Compare evaluation results across multiple models.
-
-    Args:
-        model_results_dict (dict): Dictionary mapping model names to their evaluation results
-                                   (output from evaluate() function)
-
-    Returns:
-        pd.DataFrame: A DataFrame with rows for each model and columns for metric statistics
-    """
-
-    # Dictionary to store the aggregated results
+def combine_model_results(model_results_dict: dict) -> pd.DataFrame:
     comparison_data = {}
-
-    # Process each model's results
     for model_name, results in model_results_dict.items():
-        # Convert list of dicts to DataFrame for easier calculation
         results_df = results_to_dataframe(results)
 
-        # Identify metric columns (skip Question, Ground_Truth, Answer)
         standard_cols = ["Question", "Ground_Truth", "Answer"]
         metric_cols = [col for col in results_df.columns if col not in standard_cols]
 
-        # Calculate statistics for each metric
         model_stats = {}
         for metric in metric_cols:
             metric_values = results_df[metric]
-
-            # Calculate statistics
             model_stats[f"{metric} Mean / StdDev"] = (
                 f"{metric_values.mean():.4f} / {metric_values.std():.4f}"
             )
-            # model_stats[f"{metric}_mean"] = metric_values.mean()
-            # model_stats[f"{metric}_std"] = metric_values.std()
-            # model_stats[f"{metric}_min"] = metric_values.min()
-            # model_stats[f"{metric}_max"] = metric_values.max()
 
-        # Store this model's stats
         comparison_data[model_name] = model_stats
 
-    # Convert to DataFrame
-    comparison_df = pd.DataFrame.from_dict(comparison_data, orient="index")
-
-    return comparison_df
+    return pd.DataFrame.from_dict(comparison_data, orient="index")

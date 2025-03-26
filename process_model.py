@@ -8,7 +8,7 @@ from typing import List, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_core.language_models import BaseChatModel
-from metrics_main import compare_models, evaluate, results_to_dataframe
+from metrics_main import combine_model_results, evaluate, results_to_dataframe
 from llm import query_llm
 from display import export_html
 import pandas as pd
@@ -74,11 +74,11 @@ def process_all_models(*, dataset: str):
     }
 
     print(f"Comparing models...")
-    comparison_df = compare_models(model_results)
+    comparison_df = combine_model_results(model_results)
 
     print(f"Building reports...")
     export_html(
-        name="test",
+        prefix="test",
         results_dfs=[
             ("BL-LLama2", results_to_dataframe(baseline_llama2_results)),
             ("BL-GPT-4o-mini", results_to_dataframe(baseline_gpt4o_mini_results)),

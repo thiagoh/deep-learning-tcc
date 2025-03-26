@@ -10,7 +10,7 @@ from typing import List, Union
 
 
 def export_html(
-    name: str,
+    prefix: str,
     results_dfs: List[Union[str, pd.DataFrame]],
     comparison_df: pd.DataFrame,
     output_dir: str = "outputs",
@@ -35,20 +35,37 @@ def export_html(
         Path to the generated HTML file
     """
     os.makedirs(output_dir, exist_ok=True)
-    file_uuid = str(uuid.uuid4())
-    html_file = f"{output_dir}/{name}_{file_uuid}.html"
+    html_file = f"{output_dir}/{prefix}-{str(uuid.uuid4())}.html"
 
     # Style the metrics DataFrame
-    styled_comparison_df = (
-        comparison_df.style.set_properties(
+    styled_comparison_df = comparison_df.style.set_properties(
+        **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
+    ).set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("background-color", "#42647b"),
+                    ("color", "white"),
+                    ("text-align", "left"),
+                    ("padding", "4px"),
+                    ("font-weight", "bold"),
+                ],
+            }
+        ]
+    )
+
+    # Style each results DataFrame
+    styled_results_dfs = []
+    for i, (prefix, df) in enumerate(results_dfs):
+        styled_df = df.style.set_properties(
             **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
-        )
-        .set_table_styles(
+        ).set_table_styles(
             [
                 {
                     "selector": "th",
                     "props": [
-                        ("background-color", "#42647b"),
+                        ("background-color", "#6A5A2B"),
                         ("color", "white"),
                         ("text-align", "left"),
                         ("padding", "4px"),
@@ -57,33 +74,7 @@ def export_html(
                 }
             ]
         )
-        .set_caption("Summary Metrics")
-    )
-
-    # Style each results DataFrame
-    styled_results_dfs = []
-    for i, (name, df) in enumerate(results_dfs):
-        styled_df = (
-            df.style.set_properties(
-                **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
-            )
-            .set_table_styles(
-                [
-                    {
-                        "selector": "th",
-                        "props": [
-                            ("background-color", "#6A5A2B"),
-                            ("color", "white"),
-                            ("text-align", "left"),
-                            ("padding", "4px"),
-                            ("font-weight", "bold"),
-                        ],
-                    }
-                ]
-            )
-            # .set_caption(f"Results Set {i+1}")
-        )
-        styled_results_dfs.append((name, styled_df))
+        styled_results_dfs.append((prefix, styled_df))
 
     # Create HTML with multiple tables
     with open(html_file, "w") as f:
@@ -92,7 +83,7 @@ def export_html(
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Evaluation Results: {name}</title>
+            <title>Evaluation Results</title>
             <style>
                 body {{
                     font-family: monospace;
@@ -142,7 +133,7 @@ def export_html(
             </style>
         </head>
         <body>
-            <h1>Evaluation Results: {name}</h1>
+            <h1>Evaluation Results</h1>
             
             <div class="container">
                 <h2>Summary</h2>
