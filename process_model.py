@@ -1,53 +1,42 @@
 import dotenv
 from openai import vector_stores
 
-from vectordb import get_store
+from models import MODELS
+from vectordb import get_vector_store
 
 dotenv.load_dotenv()
 
 import argparse
 from typing import List, Tuple
 
-from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
 from langchain_core.language_models import BaseChatModel
 from metrics_main import evaluate
 from llm import query_llm
-from display import export_html
 import pandas as pd
-
-# fmt: off
-MODELS = {
-    "llama2":       ("llama2",      "Llama2",       ChatOllama,),
-    "llama3.2-3b":  ("llama3.2",    "Llama3.2-3b",  ChatOllama,),
-    "gpt-4o-mini":  ("gpt-4o-mini", "GPT-4o-mini",  ChatOpenAI,),
-}
-# fmt: on
 
 
 def compute(
     *,
     model_name: str,
     llm: BaseChatModel,
-    questions_with_ground_truth: List[Tuple[str, str]],
+    questions: List[str],
+    ground_truths: List[str],
     vector_store_config_name=None,
     verbose=False,
     save_data=True,
     data_filename_prefix: str = "",
 ):
-    questions, ground_truths, predictions = query_llm(
+    answers = query_llm(
         llm=llm,
-        questions_with_ground_truth=questions_with_ground_truth,
+        vector_store_config_name=vector_store_config_name,
+        questions=questions,
         verbose=verbose,
     )
-
-    if vector_store_config_name:
-        vector_store = get_store(config_name="")
 
     results = evaluate(
         model_name=model_name,
         ground_truths=ground_truths,
-        predictions=predictions,
+        predictions=answers,
         questions=questions,
         save_data=save_data,
         data_filename_prefix=data_filename_prefix,
@@ -56,7 +45,13 @@ def compute(
     return results
 
 
-def process_model(*, dataset: str, model_id: str, data_filename_prefix: str = ""):
+def process_model(
+    *,
+    dataset: str,
+    model_id: str,
+    data_filename_prefix: str = "",
+    vector_store_config_name: str = None,
+):
     if dataset not in ["demo", "full"]:
         raise ValueError("Invalid dataset")
 
@@ -66,13 +61,16 @@ def process_model(*, dataset: str, model_id: str, data_filename_prefix: str = ""
     (model_id, model_name, ModelClass) = MODELS[args.model]
 
     data = pd.read_csv(f"./data/{dataset}.csv")
-    questions_with_ground_truth = data[["question", "answer"]].values.tolist()
+    questions = data[["question"]].values.tolist()
+    ground_truths = data[["answer"]].values.tolist()
 
     print(f'Processing questions with "{model_name}"...')
     model_results = compute(
         model_name=model_name,
         llm=ModelClass(model=model_id, temperature=0, max_retries=3),
-        questions_with_ground_truth=questions_with_ground_truth,
+        vector_store_config_name=vector_store_config_name,
+        questions=questions,
+        ground_truths=ground_truths,
         save_data=True,
         data_filename_prefix=data_filename_prefix,
     )

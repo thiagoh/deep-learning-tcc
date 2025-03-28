@@ -15,7 +15,8 @@ from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI, OpenAI
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_pinecone import PineconeVectorStore
-
+from langchain_core.embeddings import Embeddings
+from langchain_core.vectorstores import VectorStore
 from langchain import hub
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain

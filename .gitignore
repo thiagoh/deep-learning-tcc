@@ -1,6 +1,7 @@
 outputs/
 kb/
 vectordb/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -20,7 +20,7 @@ def get_embeddings() -> Embeddings:
     return embeddings
 
 
-def get_store(*, config_name: str) -> VectorStore:
+def get_vector_store(*, config_name: str) -> VectorStore:
     embeddings = get_embeddings()
     vector_store = Chroma(
         collection_name="chroma_store",

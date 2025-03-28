@@ -37,4 +37,10 @@ python3 compare_models.py --model_results_file_prefix 'run-1-llama2' 'run-1-llam
 
 # ingest knowledge base
 python3 vectordb.py --config_name s600-o100 --file_path ./data/kb --chunk_size 600 --chunk_overlap 100
+
+# question and answer
+python3 llm.py -m llama3.2-3b
+
+# question and answer with ingested knowledge base (note same config name as the --config_name above)
+python3 llm.py -m llama3.2-3b --vector_store_config_name s600-o100
 ```
