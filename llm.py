@@ -2,8 +2,11 @@ import dotenv
 
 dotenv.load_dotenv()
 
+
 from typing import List, Tuple
 from tqdm import tqdm
+from langchain_ollama import OllamaEmbeddings
+from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models import BaseChatModel
 
@@ -35,7 +38,6 @@ def query_llm(
 
     for question, ground_truth in progress_questions_with_ground_truth:
         try:
-            progress_questions_with_ground_truth.set_description(f"Processing...")
             result = chain.invoke(input={"question": question})
             answer = result.content
             ground_truths.append(ground_truth)
@@ -49,7 +51,9 @@ def query_llm(
                 print(f"# Answer:\t\t{answer}")
         except Exception as e:
             print(f"Error querying question {question}: {e}")
+
     progress_questions_with_ground_truth.set_description_str(
         "Done processing questions."
     )
+
     return questions, ground_truths, predictions

@@ -1,4 +1,6 @@
 outputs/
+kb/
+vectordb/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

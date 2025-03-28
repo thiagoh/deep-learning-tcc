@@ -34,4 +34,7 @@ python3 process_model.py --model llama3.2-3b --data_filename_prefix llama32-3b-
 
 # compare models
 python3 compare_models.py --model_results_file_prefix 'run-1-llama2' 'run-1-llama32-3b' 'run-1-gpt-4o-mini' --results_filename_prefix results-run-1
+
+# ingest knowledge base
+python3 vectordb.py --config_name s600-o100 --file_path ./data/kb --chunk_size 600 --chunk_overlap 100
 ```
