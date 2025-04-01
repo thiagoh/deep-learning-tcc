@@ -1,0 +1,7 @@
+- GPT 4 o1 as the judge
+- ollama run gemma3:1b
+- https://ollama.com/library/qwen
+- https://ollama.com/library/deepseek-r1
+- https://ollama.com/library/mistral
+- which types of errors do these llm make more often, how do we relate that to the size of llms?
+-
