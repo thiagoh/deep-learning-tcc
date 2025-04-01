@@ -1,8 +1,11 @@
 import dotenv
+from langchain_ollama import OllamaEmbeddings
+
+from utils import time_function
 
 dotenv.load_dotenv()
 
-from typing import Dict, Optional, List, Tuple, Union
+from typing import Dict, List, Tuple
 from tqdm import tqdm
 import json
 import glob
@@ -10,17 +13,10 @@ import os
 import uuid
 import warnings
 import pandas as pd
-import numpy as np
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI, OpenAI
-from langchain_ollama import ChatOllama, OllamaEmbeddings
-from langchain_pinecone import PineconeVectorStore
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
-from langchain_core.vectorstores import VectorStore
-from langchain import hub
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains.retrieval import create_retrieval_chain
-
 from langchain.evaluation import (
     StringEvaluator,
     EmbeddingDistanceEvalChain,
@@ -30,6 +26,19 @@ from langchain.evaluation import (
 )
 
 
+def get_embeddings() -> Embeddings:
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    return embeddings
+
+
+def get_llm() -> BaseChatModel:
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
+    # llm = ChatOpenAI(model="o3-mini-2025-01-31", max_retries=3)
+    return llm
+
+
+@time_function()
 def evaluate(
     *,
     model_name: str,
@@ -40,8 +49,8 @@ def evaluate(
     data_filename_prefix: str = "",
     verbose=False,
 ):
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=3)
+    embeddings = get_embeddings()
+    llm = get_llm()
 
     SYSTEM_MESSAGE = "You are a helpful assistant."
     SCORING_TEMPLATE_WITH_REFERENCE = ChatPromptTemplate.from_messages(
@@ -77,7 +86,6 @@ def evaluate(
     # fmt: on
 
     results = []
-
     ground_truths_and_predictions = list(zip(ground_truths, predictions))
     progress_ground_truths_and_predictions = tqdm(
         ground_truths_and_predictions,
@@ -85,43 +93,31 @@ def evaluate(
         desc="Evaluating Responses",
         unit="response",
     )
-    try:
-        warnings.filterwarnings("ignore", category=UserWarning)
-        for i, (ground_truth, answer) in enumerate(
-            progress_ground_truths_and_predictions
-        ):
-            progress_ground_truths_and_predictions.set_description(f"Evaluating...")
-            row_data = {
-                "Ground_Truth": ground_truth,
-                "Answer": answer,
-            }
-            if questions and i < len(questions):
-                row_data["Question"] = questions[i]
 
-            for evaluator_name, evaluator in METRICS:
-                try:
-                    question = questions[i]
-                    comparison_result = evaluator.evaluate_strings(
-                        prediction=answer,
-                        reference=ground_truth,
-                        input=question,
-                    )
-                    score = comparison_result["score"]
-                    row_data[evaluator_name] = score
-                except Exception as e:
-                    print(f"Error in {evaluator_name}: {e}")
-
-            results.append(row_data)
-        progress_ground_truths_and_predictions.set_description_str(
-            "Done evaluating responses."
+    for i, (ground_truth, answer) in enumerate(progress_ground_truths_and_predictions):
+        progress_ground_truths_and_predictions.set_description(f"Evaluating...")
+        row_data = {
+            "Ground_Truth": ground_truth,
+            "Answer": answer,
+        }
+        question = None
+        if questions and i < len(questions):
+            row_data["Question"] = questions[i]
+            question = questions[i]
+        _evaluate_answer(
+            row_data=row_data,
+            question=question,
+            ground_truth=ground_truth,
+            answer=answer,
+            evaluators=METRICS,
         )
-    finally:
-        warnings.resetwarnings()
+        results.append(row_data)
+    progress_ground_truths_and_predictions.set_description_str("Done evaluating responses.")
 
     # Save the data to a JSON file when save_data is True
     if save_data:
         os.makedirs("outputs", exist_ok=True)
-        output_file = f"outputs/{data_filename_prefix}-{str(uuid.uuid4())}.json"
+        output_file = f"outputs/{data_filename_prefix}-{model_name}-{str(uuid.uuid4())}.json"
 
         # Prepare the data to be saved
         data_to_save = {
@@ -139,7 +135,34 @@ def evaluate(
     return results
 
 
-def load_results(file_prefix: str, verbose=False) -> Dict:
+@time_function()
+def _evaluate_answer(
+    *,
+    row_data: dict,
+    question: str,
+    ground_truth: str,
+    answer: str,
+    evaluators: List[Tuple[str, StringEvaluator]],
+):
+    try:
+        warnings.filterwarnings("ignore", category=UserWarning)
+
+        for evaluator_name, evaluator in evaluators:
+            try:
+                comparison_result = evaluator.evaluate_strings(
+                    prediction=answer,
+                    reference=ground_truth,
+                    input=question,
+                )
+                score = comparison_result["score"]
+                row_data[evaluator_name] = score
+            except Exception as e:
+                print(f"Error in {evaluator_name}: {e}")
+    finally:
+        warnings.resetwarnings()
+
+
+def load_results(file_prefix: str, verbose=False) -> List[Dict]:
     directory: str = "outputs"
     if not os.path.exists(directory):
         print(f"Directory not found: {directory}")
@@ -150,18 +173,20 @@ def load_results(file_prefix: str, verbose=False) -> Dict:
         print(f"No files found with prefix '{file_prefix}' in {directory}")
         return None
 
-    target_file = sorted(matching_files)[0]
-    try:
-        with open(target_file, "r") as f:
-            results = json.load(f)
+    output = []
+    for target_file in sorted(matching_files):
+        try:
+            with open(target_file, "r") as f:
+                output.append(json.load(f))
 
-        if verbose:
-            print(f"Loaded results from: {target_file}")
-        return results
+            if verbose:
+                print(f"Loaded results from: {target_file}")
 
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading file {target_file}: {e}")
-        raise e
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error loading file {target_file}: {e}")
+            raise e
+
+    return output
 
 
 def results_to_dataframe(evaluation_results):
@@ -183,8 +208,16 @@ def results_to_dataframe(evaluation_results):
 
 
 def combine_model_results(model_results_dict: dict) -> pd.DataFrame:
+    def _sort_logic(item: Tuple[str, dict]):
+        model_name, results = item
+        model_name = model_name.replace("RAG-", "z-")
+        return model_name
+
+    sorted_model_results = dict(sorted(model_results_dict.items(), key=lambda item: item[0].replace("RAG-", "z-")))
+
     comparison_data = {}
-    for model_name, results in model_results_dict.items():
+    for model_name, results in sorted_model_results.items():
+        print(f"model_name: {model_name}")
         results_df = results_to_dataframe(results)
 
         standard_cols = ["Question", "Ground_Truth", "Answer"]
@@ -193,9 +226,7 @@ def combine_model_results(model_results_dict: dict) -> pd.DataFrame:
         model_stats = {}
         for metric in metric_cols:
             metric_values = results_df[metric]
-            model_stats[f"{metric} Mean / StdDev"] = (
-                f"{metric_values.mean():.4f} / {metric_values.std():.4f}"
-            )
+            model_stats[f"{metric} Mean | StdDev"] = f"{metric_values.mean():.4f} | {metric_values.std():.4f}"
 
         comparison_data[model_name] = model_stats
 

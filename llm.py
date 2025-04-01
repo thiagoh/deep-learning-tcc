@@ -1,6 +1,8 @@
 from tabnanny import verbose
 import dotenv
 
+from utils import time_function
+
 
 dotenv.load_dotenv()
 
@@ -8,6 +10,7 @@ dotenv.load_dotenv()
 from models import MODELS
 import traceback
 from vectordb import get_vector_store
+from langchain_core.embeddings import Embeddings
 import argparse
 from typing import List, Tuple
 from tqdm import tqdm
@@ -22,15 +25,75 @@ from langchain.chains.retrieval import create_retrieval_chain
 
 
 DEFAULT_TEMPLATE = """
+You are a helpful assistant specializing in Harry Potter trivia. Your role is to answer questions about the Harry Potter books.
+
+When answering:
+1. Ise your knowledge of Harry Potter to provide a complete answer
+2. Keep your answers concise and direct, without unnecessary explanations
+3. If you truly don't know the answer, just state "I don't know" without elaboration
+
+<example>
+  <question>
+    How old was Hermione during the Battle of Hogwarts?
+  </question>
+  <answer>
+    18 years old
+  </answer>
+</example>
+
+<question>
+{question}
+</question>
+"""
+
+DEFAULT_TEMPLATE_V1 = """
 You are a helpful assistant to someone that's answering trivia questions about the Harry Potter books. \
-Answer the question below directly. Do not include any unnecessary words in the answer.
-    
+Answer the question below based on your own knowledge. Do not include any unnecessary words in the answer.
+
+<example>
+  <question>
+    How old was Hermione during the Battle of Hogwarts?
+  <question>
+  <answer>
+    18 years old
+  </answer>
+</example>
+
 <question>
 {question}
 </question>
 """
 
 DEFAULT_TEMPLATE_WITH_CONTEXT = """
+You are a helpful assistant specializing in Harry Potter trivia. Your role is to answer questions about the Harry Potter books.
+
+Follow these instructions carefully:
+1. Evaluate whether the provided context contains RELEVANT information to answer the question
+2. If the context contains relevant information, use it to inform your answer
+3. If the context does NOT contain relevant information, IGNORE IT COMPLETELY and answer based on your knowledge of Harry Potter
+4. Never say phrases like "the text/context doesn't specify" or "based on the provided information"
+5. Give direct, concise answers without unnecessary explanations
+6. If you truly don't know the answer, simply say "I don't know"
+
+<example>
+  <question>
+    How old was Hermione during the Battle of Hogwarts?
+  </question>
+  <answer>
+    18 years old
+  </answer>
+</example>
+
+<context>
+{context}
+</context>
+
+<question>
+{question}
+</question>
+"""
+
+DEFAULT_TEMPLATE_WITH_CONTEXT_V1 = """
 You are a helpful assistant to someone that's answering trivia questions about the Harry Potter books. \
 Answer the question below directly based solely on the context below. Do not include any unnecessary words in the answer.
 
@@ -44,6 +107,7 @@ Answer the question below directly based solely on the context below. Do not inc
 """
 
 
+@time_function()
 def query_llm(
     *,
     llm: BaseChatModel,
@@ -83,15 +147,51 @@ def query_llm(
             answers.append(result["content"])
 
             if verbose:
-                print("####################################")
-                print(f"# Question: {question}")
-                print(f"# Answer:\t\t{result['content']}")
+                print(_format_result(result, question, max_length=400))
         except Exception as e:
             print(f"Error querying question '{question}': {str(e)}")
             traceback.print_exc()
 
     progress_questions.set_description_str("Done processing questions.")
     return answers
+
+
+def _format_result(result, question=None, max_length=150):
+    separator = "=" * 60
+    output = []
+    
+    # Header
+    output.append(separator)
+    output.append(f"QUERY RESULTS")
+    output.append(separator)
+    
+    # Question and Answer (most important info)
+    output.append(f"QUESTION: {question or result.get('question', 'Unknown')}")
+    output.append(f"ANSWER:   {result.get('content', 'No answer found')}")
+    output.append(separator)
+    
+    # Context sources (if available)
+    if 'context' in result and result['context']:
+        output.append("CONTEXT SOURCES:")
+        for i, doc in enumerate(result['context'], 1):
+            source = doc.metadata.get('source', 'Unknown source').split('/')[-1]
+            preview = doc.page_content[:max_length] + "..." if len(doc.page_content) > max_length else doc.page_content
+            output.append(f"  {i}. {source}")
+            output.append(f"     Preview: {preview}")
+        output.append(separator)
+    
+    # Additional metadata (if any)
+    extra_fields = [k for k in result.keys() if k not in ['question', 'content', 'context', 'input']]
+    if extra_fields:
+        output.append("ADDITIONAL INFO:")
+        for field in extra_fields:
+            value = result[field]
+            if isinstance(value, str) and len(value) > max_length:
+                value = value[:max_length] + "..."
+            output.append(f"  {field}: {value}")
+        output.append(separator)
+    
+    return "\n".join(output)
 
 
 def query_llm_from_input(
@@ -121,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         "--model",
-        choices=["llama2", "llama3.2-3b", "gpt-4o-mini"],
+        choices=MODELS.keys(),
         help="Which models to run.",
         type=str,
     )

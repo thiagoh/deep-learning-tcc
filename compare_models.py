@@ -1,3 +1,4 @@
+from tabnanny import verbose
 import dotenv
 
 dotenv.load_dotenv()
@@ -10,17 +11,18 @@ import pandas as pd
 
 
 def compare_models(
-    *, results_filename_prefix: str, model_results_file_prefix: List[str]
+    *,
+    results_filename_prefix: str,
+    model_results_file_prefix: List[str],
+    verbose: bool = False,
 ):
     model_results_map = {}
     results_dfs = []
     for model_file_prefix in model_results_file_prefix:
-        model_results_entry = load_results(model_file_prefix)
-        model_name = model_results_entry["name"]
-        model_results_map[model_name] = model_results_entry["results"]
-        results_dfs.append(
-            (model_name, results_to_dataframe(model_results_entry["results"]))
-        )
+        for model_results_entry in load_results(model_file_prefix, verbose=verbose):
+            model_name = model_results_entry["name"]
+            model_results_map[model_name] = model_results_entry["results"]
+            results_dfs.append((model_name, results_to_dataframe(model_results_entry["results"])))
 
     print(f"Comparing models...")
     comparison_df = combine_model_results(model_results_map)
@@ -49,10 +51,18 @@ if __name__ == "__main__":
         help="Which models we want to compare.",
         required=True,
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Verbose",
+        type=bool,
+        default=False,
+    )
     args = parser.parse_args()
     print(type(args.model_results_file_prefix))
     print(args.model_results_file_prefix)
     compare_models(
         results_filename_prefix=args.results_filename_prefix,
         model_results_file_prefix=args.model_results_file_prefix,
+        verbose=args.verbose,
     )

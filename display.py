@@ -6,12 +6,12 @@ import json
 import os
 import uuid
 import pandas as pd
-from typing import List, Union
+from typing import List, Tuple, Union
 
 
 def export_html(
     prefix: str,
-    results_dfs: List[Union[str, pd.DataFrame]],
+    results_dfs: List[Tuple[str, pd.DataFrame]],
     comparison_df: pd.DataFrame,
     output_dir: str = "outputs",
 ):
@@ -56,11 +56,9 @@ def export_html(
     )
 
     # Style each results DataFrame
-    styled_results_dfs = []
+    styled_results_dfs: List[Tuple[str, pd.DataFrame]] = []
     for i, (prefix, df) in enumerate(results_dfs):
-        styled_df = df.style.set_properties(
-            **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
-        ).set_table_styles(
+        styled_df = df.style.set_properties(**{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}).set_table_styles(
             [
                 {
                     "selector": "th",

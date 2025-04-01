@@ -34,7 +34,7 @@ def compute(
     )
 
     results = evaluate(
-        model_name=model_name,
+        model_name=model_name + ("-RAG" if vector_store_config_name else ""),
         ground_truths=ground_truths,
         predictions=answers,
         questions=questions,
@@ -61,8 +61,8 @@ def process_model(
     (model_id, model_name, ModelClass) = MODELS[args.model]
 
     data = pd.read_csv(f"./data/{dataset}.csv")
-    questions = data[["question"]].values.tolist()
-    ground_truths = data[["answer"]].values.tolist()
+    questions = data["question"].values.tolist()
+    ground_truths = data["answer"].values.tolist()
 
     print(f'Processing questions with "{model_name}"...')
     model_results = compute(
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         "--model",
-        choices=["llama2", "llama3.2-3b", "gpt-4o-mini"],
+        choices=MODELS.keys(),
         help="Which models to run.",
         type=str,
     )
@@ -101,10 +101,17 @@ if __name__ == "__main__":
         type=str,
         default="",
     )
+    parser.add_argument(
+        "--vector_store_config_name",
+        help="Which name this configuration has.",
+        type=str,
+        required=False,
+    )
     args = parser.parse_args()
     print(args)
     process_model(
         dataset=args.dataset,
         model_id=args.model,
         data_filename_prefix=args.data_filename_prefix,
+        vector_store_config_name=args.vector_store_config_name,
     )
