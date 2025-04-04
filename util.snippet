@@ -10,78 +10,23 @@
 'gpt-4o-mini' 
 
 
-
-
-
-
-python3 process_model.py --dataset demo --model qwen2.5-0.5b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model qwen2.5-0.5b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model deepseek-r1-1.5b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model deepseek-r1-1.5b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model qwen2.5-1.5b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model qwen2.5-1.5b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model gemma3-1b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model gemma3-1b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model gemma2-2b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model gemma2-2b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model llama3.2-3b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model llama3.2-3b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model llama2-7b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model llama2-7b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model gemma3-12b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model gemma3-12b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model deepseek-r1-14b --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model deepseek-r1-14b --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-python3 process_model.py --dataset demo --model gpt-4o-mini --data_filename_prefix run-1-s1500-o100-rag
-python3 process_model.py --dataset demo --model gpt-4o-mini --data_filename_prefix run-1-s1500-o100-rag --vector_store_config_name s1500-o100 
-
-
-
+for model in qwen2.5-0.5b deepseek-r1-1.5b qwen2.5-1.5b gemma3-1b gemma2-2b llama3.2-3b llama2-7b gemma3-12b deepseek-r1-14b gpt-4o-mini; do 
+  python3 process_model.py --dataset demo \
+    --model "$model" \
+    --run_type model_and_modelrag \
+    --vector_store_config_name s600-o100 \
+    --data_filename_suffix s600-o100 \
+    --data_filename_prefix run-8
+done 
 
 python3 compare_models.py \
-  --results_filename_prefix results-run-1-s1500-o100 \
-  --model_results_file_prefix \
-    'run-1-s1500-o100-rag-qwen2.5-0.5b' \
-    'run-1-s1500-o100-rag-deepseek-r1-1.5b' \
-    'run-1-s1500-o100-rag-qwen2.5-1.5b' \
-    'run-1-s1500-o100-rag-gemma3-1b' \
-    'run-1-s1500-o100-rag-gemma2-2b' \
-    'run-1-s1500-o100-rag-llama3.2-3b' \
-    'run-1-s1500-o100-rag-llama2-7b' \
-    'run-1-s1500-o100-rag-gemma3-12b' \
-    'run-1-s1500-o100-rag-deepseek-r1-14b' \
-    'run-1-s1500-o100-rag-gpt-4o-mini' \
-    \
-    'run-1-s1500-o100-rag-qwen2.5-0.5b-RAG' \
-    'run-1-s1500-o100-rag-deepseek-r1-1.5b-RAG' \
-    'run-1-s1500-o100-rag-qwen2.5-1.5b-RAG' \
-    'run-1-s1500-o100-rag-gemma3-1b-RAG' \
-    'run-1-s1500-o100-rag-gemma2-2b-RAG' \
-    'run-1-s1500-o100-rag-llama3.2-3b-RAG' \
-    'run-1-s1500-o100-rag-llama2-7b-RAG' \
-    'run-1-s1500-o100-rag-gemma3-12b-RAG' \
-    'run-1-s1500-o100-rag-deepseek-r1-14b-RAG' \
-    'run-1-s1500-o100-rag-gpt-4o-mini-RAG'
-
-
-
-
-
-
-
+  --results_filename_prefix results-run-8-s600-o100 \
+  --model_results_file_prefix 'run-8' \
+  --model_results_file_suffix "s600-o100" 
 
 
 
 # Vector DB ingestion
 python3 vectordb.py --config_name s600-o100  --kb_directory ./kb --chunk_size 600 --chunk_overlap 100 --vector_store_type pinecone
 python3 vectordb.py --config_name s1000-o100 --kb_directory ./kb --chunk_size 1000 --chunk_overlap 100 --vector_store_type pinecone
-python3 vectordb.py --config_name s1500-o100 --kb_directory ./kb --chunk_size 1500 --chunk_overlap 100 --vector_store_type pinecone
+python3 vectordb.py --config_name s600-o100 --kb_directory ./kb --chunk_size 1500 --chunk_overlap 100 --vector_store_type pinecone

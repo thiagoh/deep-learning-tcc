@@ -9,20 +9,47 @@ from metrics_main import combine_model_results, load_results, results_to_datafra
 from display import export_html
 import pandas as pd
 
+from logging import Logger
+
+logger = Logger("compare_models")
+
 
 def compare_models(
     *,
     results_filename_prefix: str,
-    model_results_file_prefix: List[str],
+    model_results_file_prefix: str,
+    model_results_file_suffix: str,
     verbose: bool = False,
 ):
-    model_results_map = {}
     results_dfs = []
-    for model_file_prefix in model_results_file_prefix:
-        for model_results_entry in load_results(model_file_prefix, verbose=verbose):
-            model_name = model_results_entry["name"]
-            model_results_map[model_name] = model_results_entry["results"]
-            results_dfs.append((model_name, results_to_dataframe(model_results_entry["results"])))
+
+    model_results_map = {}
+    for model_results_entry in load_results(prefix=model_results_file_prefix, suffix=model_results_file_suffix, verbose=verbose):
+        model_name = model_results_entry["name"]
+        model_results_map[model_name] = model_results_entry["results"]
+
+    grouped_results_map = {}
+    for model_name, model_results_entry in model_results_map.items():
+        is_rag = model_name.find("-RAG") >= 0
+        model_name = model_name.replace("-RAG", "")
+        grouped_results_map[model_name] = grouped_results_map[model_name] if model_name in grouped_results_map else {"name": model_name}
+        grouped_results_map[model_name][("modelrag" if is_rag else "model")] = model_results_entry
+        for entry in model_results_entry:
+          entry["IsRag"] = is_rag
+
+    for model_name, grouped_results in grouped_results_map.items():
+        if "modelrag" not in grouped_results:
+            logger.warning(f"No RAG Model available for {model_name}")
+            continue
+
+        grouped_results_map[model_name] = []
+        for model_result, modelrag_result in zip(grouped_results["model"], grouped_results["modelrag"]):
+            grouped_results_map[model_name].append(model_result)
+            grouped_results_map[model_name].append(modelrag_result)
+
+        results_dfs.append((model_name, results_to_dataframe(grouped_results_map[model_name])))
+    # print(results_dfs[0][1].columns)
+    # exit(0)
 
     print(f"Comparing models...")
     comparison_df = combine_model_results(model_results_map)
@@ -46,7 +73,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_results_file_prefix",
-        nargs="+",
+        type=str,
+        help="Which models we want to compare.",
+        required=True,
+    )
+    parser.add_argument(
+        "--model_results_file_suffix",
         type=str,
         help="Which models we want to compare.",
         required=True,
@@ -59,10 +91,10 @@ if __name__ == "__main__":
         default=False,
     )
     args = parser.parse_args()
-    print(type(args.model_results_file_prefix))
-    print(args.model_results_file_prefix)
+    print(args)
     compare_models(
         results_filename_prefix=args.results_filename_prefix,
         model_results_file_prefix=args.model_results_file_prefix,
+        model_results_file_suffix=args.model_results_file_suffix,
         verbose=args.verbose,
     )

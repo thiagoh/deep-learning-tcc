@@ -73,7 +73,7 @@ Follow these instructions carefully:
 3. If the context does NOT contain relevant information, IGNORE IT COMPLETELY and answer based on your knowledge of Harry Potter
 4. Never say phrases like "the text/context doesn't specify" or "based on the provided information"
 5. Give direct, concise answers without unnecessary explanations
-6. If you truly don't know the answer, simply say "I don't know"
+6. If you don't know the answer based on the context provided NOR based on your knowledge of Harry Potter, simply say "I don't know".
 
 <example>
   <question>
@@ -117,8 +117,6 @@ def query_llm(
 ) -> List[str]:
     chain: Runnable = None
     if vector_store_config_name:
-        # retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
-        # combine_docs_chain = create_stuff_documents_chain(llm, retrieval_qa_chat_prompt)
         combine_docs_chain = create_stuff_documents_chain(
             llm,
             ChatPromptTemplate.from_template(template=DEFAULT_TEMPLATE_WITH_CONTEXT),
@@ -127,17 +125,16 @@ def query_llm(
         chain = (
             RunnablePassthrough.assign(input=lambda input: input["question"])
             | create_retrieval_chain(
-                retriever=vector_store.as_retriever(),
+                retriever=vector_store.as_retriever(
+                    search_type="similarity_score_threshold",
+                    search_kwargs={"score_threshold": 0.6},
+                ),
                 combine_docs_chain=combine_docs_chain,
             )
             | RunnablePassthrough.assign(content=lambda result: result["answer"])
         )
     else:
-        chain = (
-            ChatPromptTemplate.from_template(template=DEFAULT_TEMPLATE)
-            | llm
-            | (lambda result: {"content": result.content})
-        )
+        chain = ChatPromptTemplate.from_template(template=DEFAULT_TEMPLATE) | llm | (lambda result: {"content": result.content})
 
     answers = []
     progress_questions = tqdm(questions, desc="Processing Questions", unit="question")
@@ -147,7 +144,7 @@ def query_llm(
             answers.append(result["content"])
 
             if verbose:
-                print(_format_result(result, question, max_length=400))
+                print(_format_result(result, question, max_length=1000))
         except Exception as e:
             print(f"Error querying question '{question}': {str(e)}")
             traceback.print_exc()
@@ -159,29 +156,29 @@ def query_llm(
 def _format_result(result, question=None, max_length=150):
     separator = "=" * 60
     output = []
-    
+
     # Header
     output.append(separator)
     output.append(f"QUERY RESULTS")
     output.append(separator)
-    
+
     # Question and Answer (most important info)
     output.append(f"QUESTION: {question or result.get('question', 'Unknown')}")
     output.append(f"ANSWER:   {result.get('content', 'No answer found')}")
     output.append(separator)
-    
+
     # Context sources (if available)
-    if 'context' in result and result['context']:
+    if "context" in result and result["context"]:
         output.append("CONTEXT SOURCES:")
-        for i, doc in enumerate(result['context'], 1):
-            source = doc.metadata.get('source', 'Unknown source').split('/')[-1]
+        for i, doc in enumerate(result["context"], 1):
+            source = doc.metadata.get("source", "Unknown source").split("/")[-1]
             preview = doc.page_content[:max_length] + "..." if len(doc.page_content) > max_length else doc.page_content
             output.append(f"  {i}. {source}")
             output.append(f"     Preview: {preview}")
         output.append(separator)
-    
+
     # Additional metadata (if any)
-    extra_fields = [k for k in result.keys() if k not in ['question', 'content', 'context', 'input']]
+    extra_fields = [k for k in result.keys() if k not in ["question", "content", "context", "input"]]
     if extra_fields:
         output.append("ADDITIONAL INFO:")
         for field in extra_fields:
@@ -190,7 +187,7 @@ def _format_result(result, question=None, max_length=150):
                 value = value[:max_length] + "..."
             output.append(f"  {field}: {value}")
         output.append(separator)
-    
+
     return "\n".join(output)
 
 

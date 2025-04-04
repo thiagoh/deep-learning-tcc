@@ -13,6 +13,8 @@ import os
 import uuid
 import warnings
 import pandas as pd
+from langchain.chains.base import Chain
+from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -47,6 +49,7 @@ def evaluate(
     questions: List[str] = None,
     save_data=True,
     data_filename_prefix: str = "",
+    data_filename_suffix: str,
     verbose=False,
 ):
     embeddings = get_embeddings()
@@ -74,6 +77,23 @@ def evaluate(
         ]
     )
 
+    class NormalizedStringEvalChain:
+
+        def __init__(self, instance: StringEvaluator):
+            self._instance = instance
+
+        def evaluate_strings(
+            self,
+            **kwargs,
+        ) -> dict:
+            result = self._instance.evaluate_strings(**kwargs)
+            result["score"] = float(result["score"]) / 10.0
+            return result
+
+    labeledScoreStringEvalChain: StringDistanceEvalChain = NormalizedStringEvalChain(
+        LabeledScoreStringEvalChain(llm=llm, prompt=SCORING_TEMPLATE_WITH_REFERENCE, criterion_name="Customized-criteria")
+    )
+
     # fmt: off
     METRICS: List[Tuple[str, StringEvaluator]] = [
         ('StringDst(JARO)', StringDistanceEvalChain(distance=StringDistance.JARO),),
@@ -81,7 +101,7 @@ def evaluate(
         ('StringDst(INDEL)', StringDistanceEvalChain(distance=StringDistance.INDEL),),
         ('StringDst(LEVENSHTEIN)', StringDistanceEvalChain(distance=StringDistance.LEVENSHTEIN),),
         ('EmbeddingDst(nomic-embed-text)', EmbeddingDistanceEvalChain(embeddings=embeddings),),
-        ('LabeledScoreString(GPT4o-mini)', LabeledScoreStringEvalChain(llm=llm, prompt=SCORING_TEMPLATE_WITH_REFERENCE, criterion_name="Customized-criteria"),),
+        ('LabeledScoreString(GPT4o-mini)', labeledScoreStringEvalChain,),
     ]
     # fmt: on
 
@@ -117,7 +137,7 @@ def evaluate(
     # Save the data to a JSON file when save_data is True
     if save_data:
         os.makedirs("outputs", exist_ok=True)
-        output_file = f"outputs/{data_filename_prefix}-{model_name}-{str(uuid.uuid4())}.json"
+        output_file = f"outputs/{data_filename_prefix}-{model_name}-{data_filename_suffix}.json"
 
         # Prepare the data to be saved
         data_to_save = {
@@ -162,15 +182,15 @@ def _evaluate_answer(
         warnings.resetwarnings()
 
 
-def load_results(file_prefix: str, verbose=False) -> List[Dict]:
+def load_results(*, prefix: str, suffix: str, verbose=False) -> List[Dict]:
     directory: str = "outputs"
     if not os.path.exists(directory):
         print(f"Directory not found: {directory}")
         return None
 
-    matching_files = glob.glob(os.path.join(directory, f"{file_prefix}*.json"))
+    matching_files = glob.glob(os.path.join(directory, f"{prefix}*{suffix}.json"))
     if not matching_files:
-        print(f"No files found with prefix '{file_prefix}' in {directory}")
+        print(f"No files found with pattern '{prefix}*{suffix}.json' in {directory}")
         return None
 
     output = []
@@ -201,26 +221,21 @@ def results_to_dataframe(evaluation_results):
     """
 
     df = pd.DataFrame(evaluation_results)
-    standard_cols = ["Question", "Ground_Truth", "Answer"]
+    standard_cols = ["Question", "Ground_Truth", "Answer", "IsRag"]
     available_cols = [col for col in standard_cols if col in df.columns]
     metric_cols = [col for col in df.columns if col not in standard_cols]
     return df[available_cols + metric_cols]
 
 
 def combine_model_results(model_results_dict: dict) -> pd.DataFrame:
-    def _sort_logic(item: Tuple[str, dict]):
-        model_name, results = item
-        model_name = model_name.replace("RAG-", "z-")
-        return model_name
-
-    sorted_model_results = dict(sorted(model_results_dict.items(), key=lambda item: item[0].replace("RAG-", "z-")))
+    sorted_model_results = dict(sorted(model_results_dict.items(), key=lambda item: item[0].replace("RAG-", "")))
 
     comparison_data = {}
     for model_name, results in sorted_model_results.items():
         print(f"model_name: {model_name}")
         results_df = results_to_dataframe(results)
 
-        standard_cols = ["Question", "Ground_Truth", "Answer"]
+        standard_cols = ["Question", "Ground_Truth", "Answer", "IsRag"]
         metric_cols = [col for col in results_df.columns if col not in standard_cols]
 
         model_stats = {}
