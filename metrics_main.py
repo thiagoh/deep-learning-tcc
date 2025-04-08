@@ -8,13 +8,9 @@ dotenv.load_dotenv()
 from typing import Dict, List, Tuple
 from tqdm import tqdm
 import json
-import glob
 import os
-import uuid
 import warnings
 import pandas as pd
-from langchain.chains.base import Chain
-from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -95,7 +91,7 @@ def evaluate(
     )
 
     # fmt: off
-    METRICS: List[Tuple[str, StringEvaluator]] = [
+    EVALUATORS: List[Tuple[str, StringEvaluator]] = [
         ('StringDst(JARO)', StringDistanceEvalChain(distance=StringDistance.JARO),),
         ('StringDst(JARO_WINKLER)', StringDistanceEvalChain(distance=StringDistance.JARO_WINKLER),),
         ('StringDst(INDEL)', StringDistanceEvalChain(distance=StringDistance.INDEL),),
@@ -129,7 +125,7 @@ def evaluate(
             question=question,
             ground_truth=ground_truth,
             answer=answer,
-            evaluators=METRICS,
+            evaluators=EVALUATORS,
         )
         results.append(row_data)
     progress_ground_truths_and_predictions.set_description_str("Done evaluating responses.")
@@ -180,69 +176,3 @@ def _evaluate_answer(
                 print(f"Error in {evaluator_name}: {e}")
     finally:
         warnings.resetwarnings()
-
-
-def load_results(*, prefix: str, suffix: str, verbose=False) -> List[Dict]:
-    directory: str = "outputs"
-    if not os.path.exists(directory):
-        print(f"Directory not found: {directory}")
-        return None
-
-    matching_files = glob.glob(os.path.join(directory, f"{prefix}*{suffix}.json"))
-    if not matching_files:
-        print(f"No files found with pattern '{prefix}*{suffix}.json' in {directory}")
-        return None
-
-    output = []
-    for target_file in sorted(matching_files):
-        try:
-            with open(target_file, "r") as f:
-                output.append(json.load(f))
-
-            if verbose:
-                print(f"Loaded results from: {target_file}")
-
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Error loading file {target_file}: {e}")
-            raise e
-
-    return output
-
-
-def results_to_dataframe(evaluation_results):
-    """
-    Convert the list of dictionaries from evaluate() into a pandas DataFrame.
-
-    Args:
-        evaluation_results (list): List of dictionaries containing evaluation results
-
-    Returns:
-        pd.DataFrame: A DataFrame containing all evaluation results
-    """
-
-    df = pd.DataFrame(evaluation_results)
-    standard_cols = ["Question", "Ground_Truth", "Answer", "IsRag"]
-    available_cols = [col for col in standard_cols if col in df.columns]
-    metric_cols = [col for col in df.columns if col not in standard_cols]
-    return df[available_cols + metric_cols]
-
-
-def combine_model_results(model_results_dict: dict) -> pd.DataFrame:
-    sorted_model_results = dict(sorted(model_results_dict.items(), key=lambda item: item[0].replace("RAG-", "")))
-
-    comparison_data = {}
-    for model_name, results in sorted_model_results.items():
-        print(f"model_name: {model_name}")
-        results_df = results_to_dataframe(results)
-
-        standard_cols = ["Question", "Ground_Truth", "Answer", "IsRag"]
-        metric_cols = [col for col in results_df.columns if col not in standard_cols]
-
-        model_stats = {}
-        for metric in metric_cols:
-            metric_values = results_df[metric]
-            model_stats[f"{metric} Mean | StdDev"] = f"{metric_values.mean():.4f} | {metric_values.std():.4f}"
-
-        comparison_data[model_name] = model_stats
-
-    return pd.DataFrame.from_dict(comparison_data, orient="index")

@@ -10,18 +10,18 @@
 'gpt-4o-mini' 
 
 
-for model in qwen2.5-0.5b deepseek-r1-1.5b qwen2.5-1.5b gemma3-1b gemma2-2b llama3.2-3b llama2-7b gemma3-12b deepseek-r1-14b gpt-4o-mini; do 
+for model in qwen2.5-0.5b deepseek-r1-1.5b; do 
   python3 process_model.py --dataset demo \
     --model "$model" \
     --run_type model_and_modelrag \
     --vector_store_config_name s600-o100 \
     --data_filename_suffix s600-o100 \
-    --data_filename_prefix run-8
+    --data_filename_prefix run-10
 done 
 
 python3 compare_models.py \
-  --results_filename_prefix results-run-8-s600-o100 \
-  --model_results_file_prefix 'run-8' \
+  --results_filename_prefix results-run-10-s600-o100 \
+  --model_results_file_prefix 'run-10' \
   --model_results_file_suffix "s600-o100" 
 
 

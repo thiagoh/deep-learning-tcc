@@ -6,7 +6,7 @@ import json
 import os
 import uuid
 import pandas as pd
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 
 def export_html(
@@ -14,51 +14,68 @@ def export_html(
     results_dfs: List[Tuple[str, pd.DataFrame]],
     comparison_df: pd.DataFrame,
     output_dir: str = "outputs",
+    allowlist_metrics: List[str] = ["LabeledScoreString(GPT4o-mini)"],
 ):
-    """
-    Export multiple result DataFrames and a metrics DataFrame to a single HTML file.
-
-    Parameters:
-    -----------
-    name : str
-        Base name for the output file
-    results_dfs : List[Union[str, pd.DataFrame]]
-        List of DataFrames containing detailed results
-    comparison_df : pd.DataFrame
-        DataFrame containing summary metrics
-    output_dir : str, optional
-        Directory to save the output file (default: "outputs")
-
-    Returns:
-    --------
-    str
-        Path to the generated HTML file
-    """
     os.makedirs(output_dir, exist_ok=True)
     html_file = f"{output_dir}/{prefix}-{str(uuid.uuid4())}.html"
 
+    # Create a flattened version of the comparison DataFrame with separate columns for each statistic
+    flat_data = []
+    for model_name in comparison_df.index:
+        row_data = {"Model": model_name}
+
+        for metric, stats in comparison_df.loc[model_name].items():
+            if allowlist_metrics and metric not in allowlist_metrics:
+                continue
+            for stat_name, stat_value in stats.items():
+                # Create column headers like "accuracy_mean", "accuracy_std", etc.
+                col_name = f"{metric}_{stat_name}"
+                row_data[col_name] = stat_value
+
+        flat_data.append(row_data)
+
+    # Convert the flattened data to a DataFrame
+    formatted_comparison = pd.DataFrame(flat_data).set_index("Model")
+
     # Style the metrics DataFrame
-    styled_comparison_df = comparison_df.style.set_properties(
-        **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
-    ).set_table_styles(
-        [
-            {
-                "selector": "th",
-                "props": [
-                    ("background-color", "#42647b"),
-                    ("color", "white"),
-                    ("text-align", "left"),
-                    ("padding", "4px"),
-                    ("font-weight", "bold"),
-                ],
-            }
-        ]
+    styled_comparison_df = (
+        formatted_comparison.style.set_properties(**{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"})
+        .format("{:.4f}")
+        .set_table_styles(
+            [
+                {
+                    "selector": "th",
+                    "props": [
+                        ("background-color", "#42647b"),
+                        ("color", "white"),
+                        ("text-align", "left"),
+                        ("padding", "4px"),
+                        ("font-weight", "bold"),
+                    ],
+                }
+            ]
+        )
     )
 
-    # Style each results DataFrame
+    # Filter and style each results DataFrame
     styled_results_dfs: List[Tuple[str, pd.DataFrame]] = []
     for i, (prefix, df) in enumerate(results_dfs):
-        styled_df = df.style.set_properties(**{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}).set_table_styles(
+        # Define standard columns to always keep
+        standard_cols = ["Question", "Ground_Truth", "Answer", "IsRag"]
+
+        # Create a new DataFrame with only the columns we want to keep
+        filtered_cols = []
+        for col in df.columns:
+            # Keep column if it's a standard column or in allowlist_metrics
+            if col in standard_cols or (not allowlist_metrics) or (col in allowlist_metrics):
+                filtered_cols.append(col)
+
+        # Filter DataFrame to only include these columns
+        filtered_df = df[filtered_cols]
+
+        styled_df = filtered_df.style.set_properties(
+            **{"text-align": "left", "padding": "8px", "border": "1px solid #ddd"}
+        ).set_table_styles(
             [
                 {
                     "selector": "th",
@@ -135,7 +152,7 @@ def export_html(
             
             <div class="container">
                 <h2>Summary</h2>
-                {styled_comparison_df.to_html() if not comparison_df.empty else "<p>No summary metrics available</p>"}
+                {styled_comparison_df.to_html() if not formatted_comparison.empty else "<p>No summary metrics available</p>"}
             </div>
         """
         )
@@ -163,3 +180,17 @@ def export_html(
         )
 
     return html_file
+
+
+def export_csv(
+    prefix: str,
+    results: pd.DataFrame,
+    output_dir: str = "outputs",
+):
+    os.makedirs(output_dir, exist_ok=True)
+    csv_file = f"{output_dir}/{prefix}-{str(uuid.uuid4())}-comparison.csv"
+
+    # Save to CSV
+    results.to_csv(csv_file, index=False)
+
+    return csv_file

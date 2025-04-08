@@ -1,6 +1,6 @@
 import dotenv
 
-from model_comparison_utils import compare_models, export_model_csv_data
+from model_comparison_utils import export_model_csv_data, export_model_data
 
 dotenv.load_dotenv()
 
@@ -36,15 +36,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     print(args)
-    compare_models(
+    export_model_data(
         results_filename_prefix=args.results_filename_prefix,
         model_results_file_prefix=args.model_results_file_prefix,
         model_results_file_suffix=args.model_results_file_suffix,
         verbose=args.verbose,
     )
-    export_model_csv_data(
-        results_filename_prefix=args.results_filename_prefix,
-        model_results_file_prefix=args.model_results_file_prefix,
-        model_results_file_suffix=args.model_results_file_suffix,
-        verbose=args.verbose,
-    )
+    
