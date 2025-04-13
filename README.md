@@ -8,6 +8,8 @@ Small language models enhanced with RAG can achieve competitive performance comp
 
 ## Project Overview
 
+![](https://github.com/thiagoh/deep-learning-tcc/blob/master/paper/tcc.png?raw=true)
+
 This project evaluates LLM performance using multiple metrics:
 - String similarity (Jaro, Jaro-Winkler, Indel, Levenshtein)
 - Embedding-based distance
