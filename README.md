@@ -30,17 +30,31 @@ cp .env.example .env
 # Add your API keys to .env
 
 # process model
-python3 process_model.py --model llama3.2-3b --data_filename_prefix llama32-3b-
+for model in qwen2.5-0.5b deepseek-r1-1.5b qwen2.5-1.5b gemma3-1b gemma2-2b llama3.2-3b llama2-7b gemma3-12b deepseek-r1-14b gpt-4o-mini; do
+  python3 process_model.py --dataset demo \
+    --model "$model" \
+    --run_type modelrag \
+    --vector_store_config_name s600-o100 \
+    --k 12 \
+    --score_threshold 0.6 \
+    --data_filename_suffix s600-o100-k-12-st-06 \
+    --data_filename_prefix run-12-mmr \
+    --verbose true
+done
 
 # compare models
-python3 compare_models.py --model_results_file_prefix 'run-1-llama2' 'run-1-llama32-3b' 'run-1-gpt-4o-mini' --results_filename_prefix results-run-1
+python3 compare_models.py \
+  --results_filename_prefix results-run-11-s600-o100 \
+  --model_results_file_prefix 'run-12' \
+  --model_results_file_suffix "s600-o100-k-12-st-06"
 
 # ingest knowledge base
 python3 vectordb.py --config_name s600-o100 --file_path ./data/kb --chunk_size 600 --chunk_overlap 100
 
-# question and answer
-python3 llm.py -m llama3.2-3b
+# Running ad-hoc Question & Answer inference without RAG support
+python3 llm.py --model llama3.2-3b
 
-# question and answer with ingested knowledge base (note same config name as the --config_name above)
-python3 llm.py -m llama3.2-3b --vector_store_config_name s600-o100
+# Running ad-hoc Question & Answer inference with RAG support
+python3 llm.py --model gemma3-12b --vector_store_config_name s600-o100 --k 12 --score_threshold 0.6 --verbose True
+
 ```

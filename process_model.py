@@ -1,16 +1,18 @@
-import uuid
+from tabnanny import verbose
 import dotenv
 
 dotenv.load_dotenv()
 
+from utils import setup_log
 import argparse
 from models import MODELS
 from typing import List, Literal, Tuple
-
 from langchain_core.language_models import BaseChatModel
-from metrics_main import evaluate
+from evaluation import evaluate
 from llm import query_llm
 import pandas as pd
+
+setup_log()
 
 
 def compute(
@@ -21,14 +23,18 @@ def compute(
     ground_truths: List[str],
     data_filename_suffix: str,
     vector_store_config_name=None,
-    verbose=False,
+    k: int = None,
+    score_threshold: float = None,
     save_data=True,
     data_filename_prefix: str = "",
+    verbose=False,
 ):
     answers = query_llm(
         llm=llm,
         vector_store_config_name=vector_store_config_name,
         questions=questions,
+        k=k,
+        score_threshold=score_threshold,
         verbose=verbose,
     )
 
@@ -40,6 +46,7 @@ def compute(
         save_data=save_data,
         data_filename_prefix=data_filename_prefix,
         data_filename_suffix=data_filename_suffix,
+        verbose=verbose,
     )
 
     return results
@@ -52,7 +59,10 @@ def process_model(
     data_filename_prefix: str = "",
     data_filename_suffix: str = "",
     vector_store_config_name: str = None,
+    k: int = None,
+    score_threshold: float = None,
     run_type: Literal["model", "model_and_modelrag", "modelrag"],
+    verbose=False,
 ):
     if dataset not in ["demo", "full"]:
         raise ValueError("Invalid dataset")
@@ -77,6 +87,7 @@ def process_model(
             save_data=True,
             data_filename_prefix=data_filename_prefix,
             data_filename_suffix=data_filename_suffix,
+            verbose=verbose,
         )
 
     if run_type == "modelrag" or run_type == "model_and_modelrag":
@@ -87,9 +98,12 @@ def process_model(
             vector_store_config_name=vector_store_config_name,  # Model with RAG
             questions=questions,
             ground_truths=ground_truths,
+            k=k,
+            score_threshold=score_threshold,
             save_data=True,
             data_filename_prefix=data_filename_prefix,
             data_filename_suffix=data_filename_suffix,
+            verbose=verbose,
         )
 
     print(f"Done.")
@@ -105,7 +119,6 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "-m",
         "--model",
         choices=MODELS.keys(),
         help="Which models to run.",
@@ -135,6 +148,24 @@ if __name__ == "__main__":
         type=str,
         required=False,
     )
+    parser.add_argument(
+        "--k",
+        help="Max number of documents to add do the context",
+        type=int,
+        required=False,
+    )
+    parser.add_argument(
+        "--score_threshold",
+        help="Score threshold to use when searching for context in vector database",
+        type=float,
+        required=False,
+    )
+    parser.add_argument(
+        "--verbose",
+        help="Verbose",
+        type=bool,
+        default=False,
+    )
     args = parser.parse_args()
     print(args)
     process_model(
@@ -143,5 +174,8 @@ if __name__ == "__main__":
         data_filename_prefix=args.data_filename_prefix,
         data_filename_suffix=args.data_filename_suffix,
         vector_store_config_name=args.vector_store_config_name,
+        k=args.k,
+        score_threshold=args.score_threshold,
         run_type=args.run_type,
+        verbose=args.verbose,
     )

@@ -1,10 +1,17 @@
 import dotenv
-from langchain_ollama import OllamaEmbeddings
 
-from utils import time_function
+from utils import setup_log, time_function
 
 dotenv.load_dotenv()
 
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message=".*Pydantic.*")
+warnings.filterwarnings("ignore", category=UserWarning, message="Ignoring input in .*EvalChain")
+
+
+import logging
+from langchain_ollama import OllamaEmbeddings
 from typing import Dict, List, Tuple
 from tqdm import tqdm
 import json
@@ -22,6 +29,10 @@ from langchain.evaluation import (
     StringDistanceEvalChain,
     LabeledScoreStringEvalChain,
 )
+
+setup_log()
+
+logger = logging.getLogger(__name__)
 
 
 def get_embeddings() -> Embeddings:
@@ -45,7 +56,7 @@ def evaluate(
     questions: List[str] = None,
     save_data=True,
     data_filename_prefix: str = "",
-    data_filename_suffix: str,
+    data_filename_suffix: str = "",
     verbose=False,
 ):
     embeddings = get_embeddings()
@@ -97,7 +108,7 @@ def evaluate(
         ('StringDst(INDEL)', StringDistanceEvalChain(distance=StringDistance.INDEL),),
         ('StringDst(LEVENSHTEIN)', StringDistanceEvalChain(distance=StringDistance.LEVENSHTEIN),),
         ('EmbeddingDst(nomic-embed-text)', EmbeddingDistanceEvalChain(embeddings=embeddings),),
-        ('LabeledScoreString(GPT4o-mini)', labeledScoreStringEvalChain,),
+        (f'LabeledScoreString({llm.model_name})', labeledScoreStringEvalChain,),
     ]
     # fmt: on
 
@@ -146,7 +157,7 @@ def evaluate(
         with open(output_file, "w") as f:
             json.dump(data_to_save, f, indent=2)
         if verbose:
-            print(f"Saved results into: {output_file}")
+            logger.info(f"Saved results into: {output_file}")
 
     return results
 
@@ -160,19 +171,14 @@ def _evaluate_answer(
     answer: str,
     evaluators: List[Tuple[str, StringEvaluator]],
 ):
-    try:
-        warnings.filterwarnings("ignore", category=UserWarning)
-
-        for evaluator_name, evaluator in evaluators:
-            try:
-                comparison_result = evaluator.evaluate_strings(
-                    prediction=answer,
-                    reference=ground_truth,
-                    input=question,
-                )
-                score = comparison_result["score"]
-                row_data[evaluator_name] = score
-            except Exception as e:
-                print(f"Error in {evaluator_name}: {e}")
-    finally:
-        warnings.resetwarnings()
+    for evaluator_name, evaluator in evaluators:
+        try:
+            comparison_result = evaluator.evaluate_strings(
+                prediction=answer,
+                reference=ground_truth,
+                input=question,
+            )
+            score = comparison_result["score"]
+            row_data[evaluator_name] = score
+        except Exception as e:
+            logger.error(f"Error in {evaluator_name}: {e}")

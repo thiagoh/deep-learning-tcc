@@ -1,8 +1,14 @@
+import os
 import time
 import functools
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+LOGS_DIR = "/tmp/tcc/logs"
+
+
+def setup_log():
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, style='{', filename=f"{LOGS_DIR}/app.log", format="{asctime} [{levelname}] {name}: {message}")
 
 
 def time_function(logger: logging.Logger = None, verbose: bool = True):

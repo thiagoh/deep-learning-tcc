@@ -1,10 +1,12 @@
 import dotenv
 
-from model_comparison_utils import compare_models, export_model_csv_data
-
 dotenv.load_dotenv()
 
+from model_comparison_utils import compare_models, export_model_csv_data
+from utils import setup_log
 import argparse
+
+setup_log()
 
 
 if __name__ == "__main__":
@@ -28,7 +30,6 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "-v",
         "--verbose",
         help="Verbose",
         type=bool,

@@ -1,12 +1,15 @@
-from tabnanny import verbose
+import logging
 import dotenv
 
-from utils import time_function
-
+from evaluation import evaluate
 
 dotenv.load_dotenv()
 
+import warnings
 
+warnings.filterwarnings("ignore", category=UserWarning, message=".*Pydantic.*")
+
+from utils import setup_log, time_function
 from models import MODELS
 import traceback
 from vectordb import get_vector_store
@@ -22,6 +25,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain import hub
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
+
+setup_log()
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_TEMPLATE = """
@@ -113,6 +120,8 @@ def query_llm(
     llm: BaseChatModel,
     vector_store_config_name: str,
     questions: List[str],
+    k: int = 4,
+    score_threshold: float = 0.6,
     verbose=False,
 ) -> List[str]:
     chain: Runnable = None
@@ -127,10 +136,19 @@ def query_llm(
             | create_retrieval_chain(
                 retriever=vector_store.as_retriever(
                     search_type="similarity_score_threshold",
-                    search_kwargs={"score_threshold": 0.6},
+                    search_kwargs={
+                        "k": k,
+                        "score_threshold": score_threshold,
+                    },
+                    # search_type="mmr",
+                    # search_kwargs={
+                    #     "k": k,
+                    #     "fetch_k": k * 5,
+                    # },
                 ),
                 combine_docs_chain=combine_docs_chain,
             )
+            # | (lambda x: print(f"Retrieval chain output keys: {x.keys()}") or x)  # Debug step
             | RunnablePassthrough.assign(content=lambda result: result["answer"])
         )
     else:
@@ -144,7 +162,7 @@ def query_llm(
             answers.append(result["content"])
 
             if verbose:
-                print(_format_result(result, question, max_length=1000))
+                logger.info(_format_result(result, question, max_length=1000))
         except Exception as e:
             print(f"Error querying question '{question}': {str(e)}")
             traceback.print_exc()
@@ -195,6 +213,8 @@ def query_llm_from_input(
     *,
     model_id: str,
     vector_store_config_name: str,
+    k: int = None,
+    score_threshold: float = None,
     verbose: bool = False,
 ):
     if model_id not in MODELS.keys():
@@ -205,18 +225,31 @@ def query_llm_from_input(
     while question != "quit":
         answers = query_llm(
             llm=ModelClass(model=model_id, temperature=0, max_retries=3),
-            vector_store_config_name=vector_store_config_name,
             questions=[question],
+            vector_store_config_name=vector_store_config_name,
+            k=k,
+            score_threshold=score_threshold,
             verbose=verbose,
         )
         print(answers[0])
+        should_evaluate = input("Evaluate? (y/n)\n> ")
+        if should_evaluate == 'y':
+          ground_truth = input("Type the Ground Truth\n> ")
+          results = evaluate(
+              model_name=model_name,
+              ground_truths=[ground_truth],
+              predictions=answers,
+              questions=[question],
+              save_data=False,
+              verbose=verbose,
+          )
+          print(results)
         question = input("> ")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-m",
         "--model",
         choices=MODELS.keys(),
         help="Which models to run.",
@@ -226,6 +259,18 @@ if __name__ == "__main__":
         "--vector_store_config_name",
         help="Which name this configuration has.",
         type=str,
+        required=False,
+    )
+    parser.add_argument(
+        "--k",
+        help="Max number of documents to add do the context",
+        type=int,
+        required=False,
+    )
+    parser.add_argument(
+        "--score_threshold",
+        help="Score threshold to use when searching for context in vector database",
+        type=float,
         required=False,
     )
     parser.add_argument(
@@ -240,5 +285,7 @@ if __name__ == "__main__":
     query_llm_from_input(
         model_id=args.model,
         vector_store_config_name=args.vector_store_config_name,
+        k=args.k,
+        score_threshold=args.score_threshold,
         verbose=args.verbose,
     )

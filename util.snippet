@@ -10,19 +10,22 @@
 'gpt-4o-mini' 
 
 
-for model in qwen2.5-0.5b deepseek-r1-1.5b; do 
+for model in qwen2.5-0.5b deepseek-r1-1.5b qwen2.5-1.5b gemma3-1b gemma2-2b llama3.2-3b llama2-7b gemma3-12b deepseek-r1-14b gpt-4o-mini; do 
   python3 process_model.py --dataset demo \
     --model "$model" \
-    --run_type model_and_modelrag \
+    --run_type modelrag \
     --vector_store_config_name s600-o100 \
-    --data_filename_suffix s600-o100 \
-    --data_filename_prefix run-10
-done 
+    --k 12 \
+    --score_threshold 0.6 \
+    --data_filename_suffix s600-o100-k-12-st-06 \
+    --data_filename_prefix run-12-mmr \
+    --verbose true
+done
 
 python3 compare_models.py \
-  --results_filename_prefix results-run-10-s600-o100 \
-  --model_results_file_prefix 'run-10' \
-  --model_results_file_suffix "s600-o100" 
+  --results_filename_prefix results-run-11-s600-o100 \
+  --model_results_file_prefix 'run-12' \
+  --model_results_file_suffix "s600-o100-k-12-st-06" 
 
 
 
@@ -30,3 +33,6 @@ python3 compare_models.py \
 python3 vectordb.py --config_name s600-o100  --kb_directory ./kb --chunk_size 600 --chunk_overlap 100 --vector_store_type pinecone
 python3 vectordb.py --config_name s1000-o100 --kb_directory ./kb --chunk_size 1000 --chunk_overlap 100 --vector_store_type pinecone
 python3 vectordb.py --config_name s600-o100 --kb_directory ./kb --chunk_size 1500 --chunk_overlap 100 --vector_store_type pinecone
+
+# Running ad-hoc Question & Answer inference
+python3 llm.py --model gemma3-12b --vector_store_config_name s600-o100 --k 12 --score_threshold 0.6 --verbose True

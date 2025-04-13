@@ -8,17 +8,11 @@ import pandas as pd
 from display import export_csv, export_html
 import sys
 import logging
-from utils import is_rag
+from utils import is_rag, setup_log
 
 
-# Set up basic configuration
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[logging.StreamHandler(sys.stdout)],
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+setup_log()
 logger = logging.getLogger(__name__)
-
 
 def compare_models(
     *,
@@ -33,7 +27,10 @@ def compare_models(
     )
 
     # Generate results DataFrame
-    grouped_results = [(model_name, _results_to_dataframe(grouped_results_entry['combined_results'])) for model_name, grouped_results_entry in grouped_results]
+    grouped_results = [
+        (model_name, _results_to_dataframe(grouped_results_entry["combined_results"]))
+        for model_name, grouped_results_entry in grouped_results
+    ]
 
     # Generate comparison DataFrame
     logger.info(f"Comparing models...")

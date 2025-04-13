@@ -14,7 +14,14 @@ def export_html(
     results_dfs: List[Tuple[str, pd.DataFrame]],
     comparison_df: pd.DataFrame,
     output_dir: str = "outputs",
-    allowlist_metrics: List[str] = ["LabeledScoreString(GPT4o-mini)"],
+    allowlist_metrics: List[str] = [
+        # "StringDst(JARO)",
+        # "StringDst(JARO_WINKLER)",
+        # "StringDst(INDEL)",
+        # "StringDst(LEVENSHTEIN)",
+        "LabeledScoreString(GPT4o-mini)",
+        "LabeledScoreString(o3-mini-2025-01-31)",
+    ],
 ):
     os.makedirs(output_dir, exist_ok=True)
     html_file = f"{output_dir}/{prefix}-{str(uuid.uuid4())}.html"
