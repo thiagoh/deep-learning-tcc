@@ -58,3 +58,19 @@ python3 llm.py --model llama3.2-3b
 python3 llm.py --model gemma3-12b --vector_store_config_name s600-o100 --k 12 --score_threshold 0.6 --verbose True
 
 ```
+
+## Results
+
+| Model | NoRAG | RAG | Accuracy increase |
+|-------|-------|-----|-------------------|
+| gemma3-1b | 0.1021 | 0.3000 | 194% |
+| qwen2.5-0.5b | 0.1184 | 0.3551 | 200% |
+| deepseek-r1-1.5b | 0.2163 | 0.3571 | 65% |
+| qwen2.5-1.5b | 0.2633 | 0.3939 | 50% |
+| gemma3-12b | 0.4878 | 0.4204 | -14% |
+| llama2-7b | 0.2347 | 0.4245 | 81% |
+| gemma2-2b | 0.3531 | 0.4327 | 23% |
+| llama3.2-3b | 0.3122 | 0.4898 | 57% |
+| deepseek-r1-14b | 0.6184 | 0.6714 | 9% |
+| Small LLMs Average | 0.3007 | 0.4272 | 42% |
+| gpt-4o-mini | 0.5959 | 0.4694 | -21% |
